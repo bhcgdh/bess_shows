@@ -1,0 +1,25 @@
+.idea/
+.vscode/
+.spyproject/
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+
+# Local/generated data and reports
+PVsyst*/
+PVsyst数据/
+all_data_shows/
+*.html
+*.xlsx
+*.xls
+~$*
+
+# Local notebooks/results
+*.ipynb
+
+# Environment and local secrets
+.env
+.venv/
+venv/
+env/
+params.local.json

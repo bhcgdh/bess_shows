@@ -1,0 +1,35 @@
+| Excel列   | 分组     | 字段名                              | 含义解释                 | 原始字段名 (Excel/系统)                               | 内部字段名 (程序)               | 备注                 |
+| -------- | ------ | -------------------------------- | ----------------------------------------------------------------------------------- | ------------------------ | ------------------ |
+| A        | Time   | Time Step                        | 时间步长（如5分钟、1小时）     | —                                                     | —                        | —                  |
+| B        | Time   | Hour                             | 小时（0-23）                 | —                                                      | —                        | —                  |
+| C        | Time   | Day                              | 日期                         | —                                                      | —                        | —                  |
+| D        | Time   | Month                            | 月份                         | —                                                      | —                        | —                  |
+| E        | PV     | AC MV Power Available            | 光伏可用交流中压功率          | E_out                                                  | pv                       | —                  |
+| F        | PV     | AC MV Surplus                    | 光伏盈余功率                 | —                                                       | —                        | —                  |
+| G        | PV     | AC MV Power to Infra             | 光伏供给基础设施的功率        | PV Power To Common Infrastructure Power [MW]            | pv_to_sub                | —                  |
+| H        | PV     | AC MV Power to BESS              | 光伏给储能充电的功率          | PV Power To BESS plant aux consumuer [MW]               | pv_to_storage            | —                  |
+| I        | PV     | AC MV Power to HV                | 光伏输往高压侧的功率          | PV Power To Plant Substation BCP [MW]                   | pv2grid                  | —                  |
+| J        | PV     | AC MV Power Dumped               | 光伏弃电功率                 | — 之前减去660?                                           | —                        | 可能为 surplus 或另计算   |
+| K        | BESS   | AC MV Power Charge               | 储能交流侧充电功率         | PV Power to BESS Plant BCP  [MW]                           | Pin_ac                   | —                  |
+| L        | BESS   | AC MV Power Discharge            | 储能交流侧放电功率         | DisCharge Power BCP [MW]                                   | Pdis_ac                  | —                  |
+| M        | BESS   | DC Power Charge                  | 储能直流侧充电功率         | Charge Power [DC]                                          | Pin_dc                   | —                  |
+| N        | BESS   | DC Power Discharge               | 储能直流侧放电功率         | Discharge Power [DC]                                       | Pdis_dc                  | —                  |
+| O        | BESS   | DC Energy                        | 储能直流侧能量             | Energy [DC]                                                | soc                      | —                  |
+| P        | BESS   | SOC                              | 储能荷电状态              | SOC/%                                                       | soc\|capacity            | —                  |
+| Q        | BESS   | Mode                             | 储能运行模式              | Mode                                                        | state                    | —                  |
+| R        | BESS   | AC MV Aux Power                  | 储能辅助设备消耗的交流功率 | BESS Auxiliary Power [MW]                                  | aux_storage              | —                  |
+| S        | BESS   | AC MV Power to Infra             | 储能供给基础设施的功率     | BESS plant Power To Common Infrastructure Power [MW]       | bat_to_sub               | —                  |
+| T        | BESS   | AC MV Power to BESS              | 储能内部自耗电或循环功率   | BESS Power To BESS plant aux consumuer [MW]                | bat_to_storage           | —                  |
+| U        | BESS   | AC MV Power to PV                | 储能向光伏侧送电          | BESS Power To PV Plant [MW]                                 | bat_to_pv                | —                  |
+| V        | BESS   | AC MV Power to HV                | 储能向高压侧放电          | —                                                           | —                        | —                  |
+| W        | HV     | AC MV Power AC HV Power at       | 高压侧交流中压功率        | Exported Power [MW]                                         | hv_power                 | —                  |
+           MV of MV/HV Transformer
+| X        | HV     | AC HV Power at EDP               | 高压侧在接入点的功率      | —                                                          | —                        | —                  |
+| Y        | HV     | Exported Power at EDP            | 向电网输出的功率          | —                                                          | —                        | —                  |
+| Z        | HV     | Imported Power at EDP            | 从电网输入的功率          | Imported Power [MW]                                        | grid_power               | —                  |
+
+蓝色字
+| AA       | HV     | Exported Power at EDP            | 另一类输出功率（备用）     | —                                                       | —                        | —                  |
+| AB       | HV     | Exported Power > 1,000 MW        | 超过1000 MW的大功率输出   | —                                                        | —                        | —                  |
+| AC       | HV     | Exported Power from BESS         | 来自储能的输出功率        | BESS Power To Plant Substation BCP [MW]                  | storage2grid             | —                  |
+| AD       | HV     | Exported Power from PV  at EDP   | 来自光伏的输出功率        | PV Power To Plant Substation BCP [MW]                    | pv2grid                  | —                  |

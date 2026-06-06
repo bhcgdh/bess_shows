@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore')
 import os
 import time
 from datetime import datetime
@@ -88,13 +90,15 @@ def run_phase(params,input_folder,finally_folder):
     params["AuxPower_year25_charge"] = _build_aux_power_year25(params["Aux power 8h"], phase_name_json)
     params["AuxPower_year25_discharge"] = _build_aux_power_year25(params["AuxPower6h"], phase_name_json)
 
-    # 指定表格的，Phase 对应的参数数据
+    # 指定表格的，Phase 对应的参数数据 , 直接读取
     ppm_phase = params['PPM Design Input Sheet'][phase_name_json]
     params["MV/HV Transformer Efficiency[%]:"] = ppm_phase["MV/HV Transformer Efficiency[%]:"]
     params["HV Losses up to DP[%]:"] = ppm_phase["HV Losses up to DP[%]:"]
     params["MV Transformer Efficiency [%]:"] = ppm_phase["MV Transformer Efficiency [%]:"]
     params["MV Cable Efficiency [%]:"] = ppm_phase["MV Cable Efficiency [%]:"]
     params["PCS Efficiency [%]:"] = ppm_phase["MV Cable Efficiency [%]:"]
+    params["LV Cable Efficiency [%]:"] = ppm_phase["LV Cable Efficiency [%]:"]
+    params["DC Cable Efficiency [%]:"] = ppm_phase["DC Cable Efficiency [%]:"]
 
     params["eta_trafo"] = params["MV/HV Transformer Efficiency[%]:"]    # 高压 变压器效率
     params["eta_cable"] = params["HV Losses up to DP[%]:"]              # 高压 电缆效率

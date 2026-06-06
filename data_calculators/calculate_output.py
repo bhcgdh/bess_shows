@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import numpy as np
 import time
+import xlsxwriter
 from data_outputs.outputs_excel_config_type2 import format_excel_all_sheets
 from data_outputs.output_pv_save import _deal_save_data_df_pv_sheet1
 
@@ -223,6 +224,27 @@ def _cal_output_cell5(result=None):
 
 
     return result
+def safe_concat(dfs, ignore_index=True):
+    # 排除空 DataFrame 或 所有元素都是 NA 的 DataFrame
+    valid_dfs = [
+        df for df in dfs
+        if not (df.empty or df.isna().all().all())
+    ]
+    if not valid_dfs:
+        return pd.DataFrame()
+    return pd.concat(valid_dfs, ignore_index=ignore_index)
+
+def _build_cell_row(df, result_cell):
+    new_row = []
+    for col in df.columns:
+        val = None
+        if col[0] in result_cell:
+            inner_dict = result_cell[col[0]]
+            val = inner_dict.get(col)
+            if val is None:
+                val = inner_dict.get(col[1])
+        new_row.append(val)
+    return new_row
 
 #  数据插入指定的行
 def _insert_cell_to_df(df, result_cell5, row_index=3):
@@ -263,15 +285,16 @@ def _insert_cell_to_df(df, result_cell5, row_index=3):
     # )
     if row_index >= len(df):
         df = pd.concat([df, new_row_df], ignore_index=True)
+        # df = safe_concat([df, new_row_df])
     else:
         df1 = df.iloc[:row_index, :]
         df2 = df.iloc[row_index:, :]
+        # df = safe_concat([df1, new_row_df, df2])
         df = pd.concat([df1, new_row_df, df2], ignore_index=True)
     return df
 
 #  标投增加数据的计算统计
 def cal_output_head(df):
-    col = cal_ouput_columns()
     result3 = _cal_output_cell3(df)
     result4 = _cal_output_cell4(df)
     result5 = _cal_output_cell5()
@@ -281,28 +304,34 @@ def cal_output_head(df):
     #
     # 0表示数值的第一行了
     # print(result4)
-    df = _insert_cell_to_df(df,  result3['cell3'], row_index=0)
-    df = _insert_cell_to_df(df,  result4['cell4'], row_index=1)
-    df = _insert_cell_to_df(df,  result5['cell5'], row_index=2)
+    head_rows = pd.DataFrame(
+        [
+            _build_cell_row(df, result3['cell3']),
+            _build_cell_row(df, result4['cell4']),
+            _build_cell_row(df, result5['cell5']),
+        ],
+        columns=df.columns
+    )
 
-    return df
+    return pd.concat([head_rows, df], ignore_index=True)
 
 # 字段进行对应 ，如timestamp改为time 类似
 def cal_standardize_columns(df,params=None):
-    ds = pd.DataFrame()
+    output_columns = cal_ouput_columns()
+    ds = pd.DataFrame(index=df.index, columns=output_columns)
 
     # Excel列 A 1 时间列
     ds[('Time', 'Time Step')] = df.index
 
-    df['temp'] = pd.to_datetime(df['Time'], format='%H:%M:%S')
-    df['Date'] = pd.to_datetime(df['Date'])
+    time_values = pd.to_datetime(df['Time'], format='%H:%M:%S')
+    date_values = pd.to_datetime(df['Date'])
 
     # Excel列 B
-    ds[('Time', 'Hour')] = df['temp'].dt.hour
-    # Excel列 D
-    ds[('Time', 'Month')] = df['Date'].dt.month
+    ds[('Time', 'Hour')] = time_values.dt.hour
     # Excel列 C
-    ds[('Time', 'Day')] = df['Date'].dt.day
+    ds[('Time', 'Day')] = date_values.dt.day
+    # Excel列 D
+    ds[('Time', 'Month')] = date_values.dt.month
 
     # Excel列 E PV列
     ds[('PV', 'AC MV Power Available')] = df['E_out']  #  E
@@ -322,7 +351,7 @@ def cal_standardize_columns(df,params=None):
     # Excel列 J J | 字段: pv2grid - 660   df['PV Power To Plant Substation BCP [MW]'] * params["eta_trafo"] * params['eta_cable'] # 来自光伏 AD
     ds[('PV', 'AC MV Power Dumped')] = df['PV Power To Plant Substation BCP [MW]'] * params["eta_trafo"] * params['eta_cable']  - params["pv_max_Discharge_cap"]  # 比660大的正的为结果值对把
     # Excel列 J
-    ds[('PV', 'AC MV Power Dumped')] = [max(0, i) for i in  ds[('PV', 'AC MV Power Dumped')]] # 比660大的正的为结果值对把
+    ds[('PV', 'AC MV Power Dumped')] = ds[('PV', 'AC MV Power Dumped')].clip(lower=0) # 比660大的正的为结果值对把
 
     # Excel列 K BESS列 | 字段: Pin_ac  新增 -
     ds[('BESS', 'AC MV Power Charge')] = df['PV Power to BESS Plant BCP [MW]']  # 储能交流侧充电功率 K
@@ -353,11 +382,9 @@ def cal_standardize_columns(df,params=None):
 
     # 映射 Mode，0：standby，1：charge，2：discharge
     mode_reverse_map = {'Standby': '0', 'Charging': '1', 'Discharge': '2'}
-    df['tmp_mode'] = df['Mode'].map(mode_reverse_map)
-
 
     # Excel列 Q
-    ds[('BESS', 'Mode')] = df['tmp_mode']  # 储能运行模式
+    ds[('BESS', 'Mode')] = df['Mode'].map(mode_reverse_map)  # 储能运行模式
 
     # Excel列 R 新增2 储能放电时 需要储能 提供的 - 未增  R | 字段: aux_storage，更改2 ，在原始计算中，区分充电8h，放电6的功率选择
     ds[('BESS', 'AC LV Aux Power')] = df['BESS Auxiliary Power [MW]']  # 储能辅助设备消耗功率
@@ -378,7 +405,7 @@ def cal_standardize_columns(df,params=None):
 
     #  ======================== 更新  Excel列 F ---- F 列的数据 = E-G-R , E 是负数则为0 ====================================
     ds[('PV', 'AC MV Surplus')] = ds[('PV', 'AC MV Power Available')]-ds[('PV', 'AC MV Power to Infra')] - ds[('BESS', 'AC LV Aux Power')]
-    ds[('PV', 'AC MV Surplus')] = [ds[('PV', 'AC MV Surplus')][i] if ds[('PV', 'AC MV Power Available')][i]>0 else 0 for i in ds.index]
+    ds[('PV', 'AC MV Surplus')] = ds[('PV', 'AC MV Surplus')].where(ds[('PV', 'AC MV Power Available')] > 0, 0)
 
     # Excel列 S 只有储能提供的时候，才会显示值 Q | 字段: bat_to_sub
     # ds[('BESS', 'AC MV Power to Infra')] = df['BESS plant Power To Common Infrastructure Power [MW]']  # 储能供给基础设施
@@ -396,7 +423,7 @@ def cal_standardize_columns(df,params=None):
     # Excel列 U | 字段: bat_to_pv
     # ds[('BESS', 'AC MV Power to PV')] = df['BESS Power To PV Plant [MW]']  # 储能向光伏馈电
     # 更改2 光伏不发电时的 abs(E),
-    ds[('BESS', 'AC MV Power to PV')]  = [abs(i) if i<0 else 0 for i in  ds[('PV', 'AC MV Power Available')] ]# 储能向光伏馈电
+    ds[('BESS', 'AC MV Power to PV')] = (-ds[('PV', 'AC MV Power Available')]).clip(lower=0) # 储能向光伏馈电
 
 
     # Excel列 V | 字段: storage2grid
@@ -438,7 +465,7 @@ def cal_standardize_columns(df,params=None):
     # 新增 - AD   来自光伏 乘以 params["eta_trafo"] = 0.995    # 高压变压器效率    params["eta_cable"] = 0.99     # 高压电缆效率
 
     # Excel列 AC  使用其他列 Exported Power [MW]， 如果 I>0 取值 Y 否则0 ， AC MV Power to HV 即 pv2grid>0 ,那么  取值 Y Exported Power [MW] 即 hv_power
-    ds[('HVs', 'Exported Power from BESS at EDP')] = [ds[('HV', 'Exported Power at EDP')][i] if ds[('BESS', 'AC MV Power to HV')][i]>0 else 0 for i in ds.index]
+    ds[('HVs', 'Exported Power from BESS at EDP')] = ds[('HV', 'Exported Power at EDP')].where(ds[('BESS', 'AC MV Power to HV')] > 0, 0)
 
     # Excel列 AD AD = AA-AC
     ds[('HVs', 'Exported Power from PV at EDP')] = ds[('HVs', 'Exported Power at EDP.1')]-ds[('HVs', 'Exported Power from BESS at EDP')]
@@ -446,7 +473,7 @@ def cal_standardize_columns(df,params=None):
     # 映射 Mode，0：standby，1：charge，2：discharge
 
     # 更新 excel 列 H, 充电的时候有值，其余为0
-    ds[('PV', 'AC MV Power to BESS')] = [ds[('PV', 'AC MV Power to BESS')][i] if ds[('BESS', 'Mode')][i] == '1' else 0 for i in ds.index]
+    ds[('PV', 'AC MV Power to BESS')] = ds[('PV', 'AC MV Power to BESS')].where(ds[('BESS', 'Mode')] == '1', 0)
 
     # Excel列 L 更改3 #  L = S + U +V + R * (params["MV Transformer Efficiency [%]:"] * params['MV Cable Efficiency [%]:'])
     ds[('BESS', 'AC MV Power Discharge')] = ds[('BESS', 'AC MV Power to Infra')] + ds[('BESS', 'AC MV Power to PV')] + ds[('BESS', 'AC MV Power to HV')]
@@ -454,7 +481,7 @@ def cal_standardize_columns(df,params=None):
 
 
     # 更新 excel 列 L N T, 放电的时候有值，其余为0
-    ds[('BESS', 'AC MV Power Discharge')] = [ds[('BESS', 'AC MV Power Discharge')][i] if ds[('BESS', 'Mode')][i] == '2' else 0 for i in ds.index]
+    ds[('BESS', 'AC MV Power Discharge')] = ds[('BESS', 'AC MV Power Discharge')].where(ds[('BESS', 'Mode')] == '2', 0)
 
 
     # Excel列 N | 字段: Pdis_dc 更改3  Mode，0：standby，1：charge，2：discharge
@@ -463,23 +490,22 @@ def cal_standardize_columns(df,params=None):
     # ds[('BESS', 'DC Power Discharge')] = ds[('BESS', 'DC Power Discharge')]/params['eta_dis']
     #  更新  N  =  L / 放电效率
     ds[('BESS', 'DC Power Discharge')] = ds[('BESS', 'AC MV Power Discharge')]/params['eta_dis']
-    ds[('BESS', 'DC Power Discharge')] = [ds[('BESS', 'DC Power Discharge')][i] if ds[('BESS', 'Mode')][i] == '2' else 0 for i in ds.index]
+    ds[('BESS', 'DC Power Discharge')] = ds[('BESS', 'DC Power Discharge')].where(ds[('BESS', 'Mode')] == '2', 0)
 
     # 更新 excel列 I  新增3 = F-G - k - R/(params["eta_trafo"] * params['eta_cable'])
     ds[('PV', 'AC MV Power to HV')] = ds[('PV', 'AC MV Surplus')] -  ds[('PV', 'AC MV Power to Infra')] - ds[('BESS', 'AC MV Power Charge')] - ds[('BESS', 'AC LV Aux Power')]/(params["eta_trafo"] * params['eta_cable'])
-    ds[('PV', 'AC MV Power to HV')] = [ds[('PV', 'AC MV Power to HV')][i] if ds[('PV', 'AC MV Power Available')][i]>0 else 0 for i in ds.index]
+    ds[('PV', 'AC MV Power to HV')] = ds[('PV', 'AC MV Power to HV')].where(ds[('PV', 'AC MV Power Available')] > 0, 0)
 
 
     # Excel列 T  更改3 放电状态下：T=R ，其他未0
     ds[('BESS', 'AC LV Power to BESS')] = ds[('BESS', 'AC LV Aux Power')]
-    ds[('BESS', 'AC LV Power to BESS')] = [ds[('BESS', 'AC LV Power to BESS')][i] if ds[('BESS', 'Mode')][i] == '2' else 0 for i in ds.index]
+    ds[('BESS', 'AC LV Power to BESS')] = ds[('BESS', 'AC LV Power to BESS')].where(ds[('BESS', 'Mode')] == '2', 0)
 
     # Excel列 N  更改3  = L / eta_dis 放电效率
     ds[('BESS', 'DC Power Discharge')] = ds[('BESS', 'AC MV Power Discharge')] / params['eta_dis']
 
 
-    ds.columns = pd.MultiIndex.from_tuples(ds.columns)
-    return ds
+    return ds[output_columns]
 
 
 # 数据拼接

@@ -325,7 +325,10 @@ def run_Phase_ABC():
 
         end = time.time()  # 结束时间
         print(f"{phase_name} 执行时间: {end - start:.3f} 秒")
-
         print(f"--------------------------------- 执行完成 {phase_name} 数据 ----------------------------------------- ")
 
+
+start_year = time.time()  # 结束时间
 run_Phase_ABC()
+end_year = time.time()  # 结束时间
+print(f" 所有代码执行时间: {end_year - start_year:.3f} 秒")

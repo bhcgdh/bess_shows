@@ -1185,5 +1185,7 @@ AuxPower_year25_discharge:
 'MV Transformer Efficiency [%]:': 0.992
 'MV Cable Efficiency [%]:': 0.998
 'PCS Efficiency [%]:': 0.998
+'LV Cable Efficiency [%]:': 0.998
+'DC Cable Efficiency [%]:': 0.9998999999999999
 eta_trafo: 0.993
 eta_cable: 0.993

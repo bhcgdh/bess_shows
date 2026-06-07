@@ -556,6 +556,128 @@ def format_all_sheets_with_method(input_file):
 
     # 旧逻辑保留，不删除。
 
+def _output_format_config():
+    return {
+        "fill_config": [(1, 5, 1, 1, 'F2F2F2'), (1, 5, 2, 2, 'F2F2F2'), (1, 5, 3, 3, 'F2F2F2'), (1, 5, 4, 4, 'F2F2F2'),
+                        (1, 5, 5, 5, 'E2F0D9'), (1, 5, 6, 6, 'E2F0D9'), (1, 5, 7, 7, 'E2F0D9'), (1, 5, 8, 8, 'E2F0D9'),
+                        (1, 5, 9, 9, 'E2F0D9'), (1, 5, 10, 10, 'E2F0D9'), (1, 5, 11, 11, 'D9E1F2'), (1, 5, 12, 12, 'D9E1F2'),
+                        (1, 5, 13, 13, 'D9E1F2'), (1, 5, 14, 14, 'D9E1F2'), (1, 5, 15, 15, 'D9E1F2'),
+                        (1, 5, 16, 16, 'D9E1F2'), (1, 5, 17, 17, 'D9E1F2'), (1, 5, 18, 18, 'D9E1F2'),
+                        (1, 5, 19, 19, 'D9E1F2'), (1, 5, 20, 20, 'D9E1F2'), (1, 5, 21, 21, 'D9E1F2'),
+                        (1, 5, 22, 22, 'D9E1F2'), (1, 5, 23, 23, 'FFF2CC'), (1, 5, 24, 24, 'FFF2CC'),
+                        (1, 5, 25, 25, 'FFF2CC'), (1, 5, 26, 26, 'FFF2CC')],
+        "font_config": [(27, '#0070C0', 9, True), (28, '#0070C0', 9, True), (29, '#0070C0', 9, True), (30, '#0070C0', 9, True)],
+        "underline_config": [(5, 1, 30)],
+        "right_border_config": [(4, 1, 2000)],
+        "merge_config": [(1, 1, 1, 4, None), (1, 5, 1, 10, 'PV'), (1, 11, 1, 22, 'BESS'), (1, 23, 1, 26, 'HV'),
+                         (1, 27, 1, 30, None)],
+        "left_align_rows": [(2, 5, 1, 30)],
+        "col_width": {1: 8, 2: 8, 3: 8, 4: 8, 5: 8, 6: 8, 7: 12, 8: 8, 9: 8, 10: 8, 11: 12, 12: 12, 13: 9, 14: 9, 15: 9,
+                      16: 6, 17: 6, 18: 12, 19: 12, 20: 12, 21: 9, 22: 9, 23: 8, 24: 8, 25: 9, 26: 9, 27: 9, 28: 9,
+                      29: 9, 30: 9},
+    }
+
+def _xlsx_value(value):
+    if pd.isna(value):
+        return ""
+    return value
+
+def _apply_output_sheet_format(workbook, ws, sheet_values, config):
+    nrows, ncols = sheet_values.shape
+
+    col_width = config["col_width"]
+    for col_idx, width in col_width.items():
+        ws.set_column(col_idx - 1, col_idx - 1, width)
+
+    format_cache = {}
+    def get_format(props):
+        key = tuple(sorted(props.items()))
+        if key not in format_cache:
+            format_cache[key] = workbook.add_format(props)
+        return format_cache[key]
+
+    cell_styles = {}
+    for r1, r2, c1, c2, color in config["fill_config"]:
+        for row in range(r1 - 1, min(r2, nrows)):
+            for col in range(c1 - 1, min(c2, ncols)):
+                cell_styles.setdefault((row, col), {}).update({'bg_color': color})
+
+    for col_idx, font_color, font_size, bold in config["font_config"]:
+        col = col_idx - 1
+        if col < ncols:
+            for row in range(nrows):
+                cell_styles.setdefault((row, col), {}).update({
+                    'font_color': font_color, 'font_size': font_size, 'bold': bold
+                })
+
+    for row_idx, col_start, col_end in config["underline_config"]:
+        row = row_idx - 1
+        if row < nrows:
+            for col in range(col_start - 1, min(col_end, ncols)):
+                cell_styles.setdefault((row, col), {}).update({'bottom': 1})
+
+    for col_idx, row_start, row_end in config["right_border_config"]:
+        col = col_idx - 1
+        if col < ncols:
+            for row in range(row_start - 1, min(row_end, nrows)):
+                cell_styles.setdefault((row, col), {}).update({'right': 1})
+
+    for r1, r2, c1, c2 in config["left_align_rows"]:
+        for row in range(r1 - 1, min(r2, nrows)):
+            for col in range(c1 - 1, min(c2, ncols)):
+                cell_styles.setdefault((row, col), {}).update({
+                    'align': 'left', 'valign': 'vcenter', 'text_wrap': True
+                })
+
+    for (row, col), props in cell_styles.items():
+        ws.write(row, col, _xlsx_value(sheet_values[row, col]), get_format(props))
+
+    for r1, c1, r2, c2, value in config["merge_config"]:
+        row_start, col_start = r1 - 1, c1 - 1
+        row_end, col_end = r2 - 1, c2 - 1
+        if row_start >= nrows or col_start >= ncols:
+            continue
+        merge_props = {'align': 'center', 'valign': 'vcenter'}
+        merge_props.update(cell_styles.get((row_start, col_start), {}))
+        ws.merge_range(row_start, col_start, row_end, col_end, value, get_format(merge_props))
+
+def _write_output_sheet_xlsxwriter(workbook, sheet_name, df_year, config):
+    ws = workbook.add_worksheet(sheet_name)
+    header_rows = [
+        [str(lvl0) for lvl0, _ in df_year.columns],
+        [str(lvl1) for _, lvl1 in df_year.columns],
+    ]
+    data_values = df_year.to_numpy(dtype=object, copy=False)
+    sheet_values = np.vstack([np.array(header_rows, dtype=object), data_values])
+
+    for row_idx, row in enumerate(sheet_values):
+        ws.write_row(row_idx, 0, [_xlsx_value(value) for value in row])
+
+    _apply_output_sheet_format(workbook, ws, sheet_values, config)
+
+def _save_formatted_year_raw_dfs_to_workbook(all_year_raw_dfs, output_file, sheet_prefix):
+    if os.path.exists(output_file):
+        os.remove(output_file)
+
+    config = _output_format_config()
+    workbook = xlsxwriter.Workbook(output_file)
+    try:
+        for item in all_year_raw_dfs:
+            year_index = item["year_index"]
+            df_raw = item["df"]
+            params = item["params"]
+
+            df_year = _deal_save_data_df_pv_sheet1(df_raw, params)
+            df_year = cal_standardize_columns(df_year, params=params)
+            df_year = cal_output_head(df_year)
+
+            sheet_name = f"{sheet_prefix}{str(year_index).zfill(2)}"
+            _write_output_sheet_xlsxwriter(workbook, sheet_name, df_year, config)
+    finally:
+        workbook.close()
+
+    print(f"所有 sheet 已直接保存为格式化文件：{output_file}")
+
 
 def save_all_year_raw_dfs_to_single_workbook(
         all_year_raw_dfs=None,
@@ -572,7 +694,12 @@ def save_all_year_raw_dfs_to_single_workbook(
     if output_file is None:
         raise ValueError("output_file 不能为空")
 
-    wb = Workbook()
+    if format_after_save:
+        formatted_output_file = output_file.replace('.xlsx', '_format.xlsx')
+        _save_formatted_year_raw_dfs_to_workbook(all_year_raw_dfs, formatted_output_file, sheet_prefix)
+        return
+
+    wb = Workbook(write_only=True)
     if 'Sheet' in wb.sheetnames:
         std = wb['Sheet']
         wb.remove(std)
@@ -592,19 +719,14 @@ def save_all_year_raw_dfs_to_single_workbook(
         sheet_name = f"{sheet_prefix}{str(year_index).zfill(2)}"
         ws = wb.create_sheet(sheet_name)
 
-        for j, (lvl0, lvl1) in enumerate(df_year.columns, start=1):
-            ws.cell(row=1, column=j, value=str(lvl0))
-            ws.cell(row=2, column=j, value=str(lvl1))
+        ws.append([str(lvl0) for lvl0, _ in df_year.columns])
+        ws.append([str(lvl1) for _, lvl1 in df_year.columns])
 
-        for i, row in enumerate(df_year.values, start=3):
-            for j, val in enumerate(row, start=1):
-                ws.cell(row=i, column=j, value=val)
+        for row in df_year.itertuples(index=False, name=None):
+            ws.append(row)
 
     wb.save(output_file)
     wb.close()
-
-    if format_after_save:
-        format_all_sheets_with_method(output_file)
 
 # format_all_sheets_with_method(R"E:\bess_shows\PVsyst数据\结果数据\UAE_DEWA7_Phase_A_PM_Output v1.0.xlsx")
 # format_all_sheets_with_method(R"E:\bess_shows\PVsyst数据\结果数据\UAE_DEWA7_Phase_B_PM_Output v1.0.xlsx")
